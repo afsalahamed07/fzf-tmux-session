@@ -1,22 +1,32 @@
 #!/usr/bin/env bash
 # List tmux sessions sorted by last accessed order (most recent first)
-# and display only a session index and the session name.
+# and show only a session index and the session name,
+# excluding the session currently in use.
 
-# Get the list of sessions with their last attached timestamp and name.
-# The format is: "<last_attached> <session_name>"
+# Get the current session name.
+current_session=$(tmux display-message -p '#S')
+
+# Get the list of sessions with last attached timestamp and name.
+# Format: "<last_attached> <session_name>"
 sessions=$(tmux list-sessions -F "#{session_last_attached} #{session_name}" 2>/dev/null)
 if [ -z "$sessions" ]; then
   echo "No tmux sessions found."
   exit 1
 fi
 
-# Sort the sessions by the last attached timestamp (numerically, descending)
-sorted_sessions=$(echo "$sessions" | sort -nr)
+# Exclude the current session from the list.
+sessions_filtered=$(echo "$sessions" | awk -v curr="$current_session" '$2 != curr')
 
-# Extract only the session names (second field) while preserving the sorted order.
-session_names=$(echo "$sorted_sessions" | awk '{print $2}')
+# Check if there are any sessions left after filtering.
+if [ -z "$sessions_filtered" ]; then
+  echo "No other tmux sessions found."
+  exit 1
+fi
 
-# Add an index to the sessions for display (session number: session name).
+# Sort sessions by last attached time (descending) then extract the session name.
+session_names=$(echo "$sessions_filtered" | sort -nr | awk '{print $2}')
+
+# Add an index number to each session name.
 indexed_sessions=$(echo "$session_names" | nl -w1 -s': ')
 
 # Let the user choose a session using fzf.
