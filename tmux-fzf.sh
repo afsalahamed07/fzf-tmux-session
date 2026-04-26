@@ -64,26 +64,54 @@ build_rows() {
   printf "%s" "$rows"
 }
 
-rows=$(build_rows)
-if [ -z "$rows" ]; then
-  echo "No tmux sessions found."
-  exit 1
-fi
+while :; do
+  rows=$(build_rows)
+  if [ -z "$rows" ]; then
+    echo "No tmux sessions found."
+    exit 1
+  fi
 
-selection_line=$(printf "%s" "$rows" | fzf \
-  --delimiter=$'\t' \
-  --with-nth=2 \
-  --prompt="tmux session> " \
-  --header="enter: switch session | esc: close" \
-  --layout=reverse \
-  --height=100% \
-  --border=rounded \
-  --bind='start:down' \
-  --color='bg:#1c1c1c,bg+:#262626,fg:#bcbcbc,fg+:#bcbcbc,hl:#87afaf,hl+:#d7af87,prompt:#87afaf,info:#767676,pointer:#87afaf,marker:#d787d7,spinner:#87afaf,header:#9e9e9e')
+  selection=$(
+    printf "%s" "$rows" | fzf \
+      --delimiter=$'\t' \
+      --with-nth=2 \
+      --prompt="tmux session> " \
+      --header="enter: switch session | ctrl-x: kill session | esc: close" \
+      --layout=reverse \
+      --height=100% \
+      --border=rounded \
+      --bind='start:down' \
+      --expect=ctrl-x \
+      --color='bg:#1c1c1c,bg+:#262626,fg:#bcbcbc,fg+:#bcbcbc,hl:#87afaf,hl+:#d7af87,prompt:#87afaf,info:#767676,pointer:#87afaf,marker:#d787d7,spinner:#87afaf,header:#9e9e9e'
+  )
 
-if [ -z "$selection_line" ]; then
+  if [ -z "$selection" ]; then
+    exit 0
+  fi
+
+  key=${selection%%$'\n'*}
+  selection_line=${selection#*$'\n'}
+
+  if [ "$selection_line" = "$selection" ]; then
+    selection_line=""
+  fi
+
+  if [ -z "$selection_line" ]; then
+    continue
+  fi
+
+  session_name=${selection_line%%$'\t'*}
+
+  if [ "$key" = "ctrl-x" ]; then
+    if [ "$session_name" = "$current_session" ]; then
+      tmux display-message "Refusing to kill the current session from the picker"
+      continue
+    fi
+
+    tmux kill-session -t "$session_name"
+    continue
+  fi
+
+  tmux switch-client -t "$session_name"
   exit 0
-fi
-
-selection=${selection_line%%$'\t'*}
-tmux switch-client -t "$selection"
+done
